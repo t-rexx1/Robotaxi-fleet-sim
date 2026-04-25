@@ -28,7 +28,6 @@ PLOT_STYLE = dict(
     plot_bgcolor="white",
     paper_bgcolor="white",
     font=dict(family="Arial, sans-serif", color="#1a1a2e", size=12),
-    margin=dict(l=50, r=20, t=45, b=40),
 )
 GRID_STYLE = dict(showgrid=True, gridcolor="#e0e0e0", gridwidth=1,
                   zeroline=True, zerolinecolor="#cccccc",
