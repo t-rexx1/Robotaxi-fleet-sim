@@ -26,6 +26,13 @@ st.set_page_config(
 )
 
 # ── Session state initialisation ─────────────────────────────────────────────
+APP_VERSION = "2"  # bump this to force a session reset after major updates
+
+if st.session_state.get("_version") != APP_VERSION:
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+    st.session_state["_version"] = APP_VERSION
+
 if "fleet" not in st.session_state:
     st.session_state.fleet = FleetManager(num_agents=15, grid_size=20)
 if "running" not in st.session_state:
