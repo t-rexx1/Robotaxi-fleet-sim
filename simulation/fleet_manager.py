@@ -13,6 +13,7 @@ from typing import List, Dict, Deque, Tuple, Optional
 from simulation.agent import Agent, AgentState
 from simulation.city_grid import CityGrid
 from simulation.fault_injector import FaultInjector
+from simulation.ga_dispatcher import GADispatcher
 from data.logger import SimLogger
 
 
@@ -41,7 +42,7 @@ class FleetMetrics:
 
 
 class FleetManager:
-    RIDE_REQUEST_INTERVAL = 8       # ticks between new ride requests (base)
+    RIDE_REQUEST_INTERVAL = 4       # ticks between new ride requests (base)
     FAULT_PROBABILITY = 0.003       # random fault chance per agent per tick
     SURGE_EXTRA_REQUESTS = 5
 
@@ -61,6 +62,7 @@ class FleetManager:
         self.event_log: Deque[str] = deque(maxlen=200)
         self.metrics_history: List[FleetMetrics] = []
         self.fault_injector = FaultInjector()
+        self.ga = GADispatcher()
         self.logger = SimLogger()
         self._rider_counter = 0
         self._next_request_tick = self.RIDE_REQUEST_INTERVAL
@@ -87,9 +89,10 @@ class FleetManager:
         if self.tick >= self._next_request_tick:
             req = self._generate_request()
             self.pending_requests.append(req)
-            events.append(f"Tick {self.tick}: Ride request {req.rider_id} at {req.pickup}")
+            px, py = round(req.pickup[0], 1), round(req.pickup[1], 1)
+            events.append(f"Tick {self.tick}: Ride request {req.rider_id} at ({px}, {py})")
             self._next_request_tick = self.tick + random.randint(
-                self.RIDE_REQUEST_INTERVAL - 2, self.RIDE_REQUEST_INTERVAL + 4
+                self.RIDE_REQUEST_INTERVAL - 1, self.RIDE_REQUEST_INTERVAL + 3
             )
 
         # Dispatch available agents to pending requests
@@ -153,19 +156,30 @@ class FleetManager:
     def _dispatch_cycle(self) -> List[str]:
         events = []
         available = [a for a in self.agents if a.state == AgentState.AVAILABLE]
-        while self.pending_requests and available:
-            req = self.pending_requests.popleft()
-            best = min(
-                available,
-                key=lambda a: math.hypot(
-                    a.position[0] - req.pickup[0], a.position[1] - req.pickup[1]
-                ),
-            )
-            best.dispatch(req.pickup, req.dropoff, req.rider_id)
+        if not self.pending_requests or not available:
+            return events
+
+        reqs = list(self.pending_requests)
+        assignments = self.ga.assign(available, reqs)
+
+        assigned_req_ids = set()
+        for agent, req in assignments:
+            agent.dispatch(req.pickup, req.dropoff, req.rider_id)
             self.active_requests[req.rider_id] = req
-            available.remove(best)
+            assigned_req_ids.add(req.rider_id)
+            events.append(f"Tick {self.tick}: {agent.agent_id} dispatched for {req.rider_id}")
+
+        # Remove dispatched requests from the queue
+        self.pending_requests = deque(
+            r for r in self.pending_requests if r.rider_id not in assigned_req_ids
+        )
+
+        if len(assignments) > 1:
+            s = self.ga.stats
             events.append(
-                f"Tick {self.tick}: {best.agent_id} dispatched for {req.rider_id}"
+                f"Tick {self.tick}: GA dispatch — {len(assignments)} assignments, "
+                f"{s['improvement_pct']}% better than greedy "
+                f"(saved {s['last_greedy_cost'] - s['last_ga_cost']:.1f} dist units)"
             )
         return events
 
@@ -212,3 +226,7 @@ class FleetManager:
     @property
     def recent_events(self) -> List[str]:
         return list(self.event_log)
+
+    @property
+    def ga_stats(self) -> dict:
+        return self.ga.stats

@@ -243,8 +243,10 @@ if len(fleet.metrics_history) > 2:
 
     with c2:
         fig_bat = px.line(
-            hist_df, x="tick", y=["avg_battery", "faulted"],
+            hist_df, x="tick",
+            y=["avg_battery", "faulted"],
             title="Avg Battery & Faults Over Time",
+            labels={"avg_battery": "Avg Battery (%)", "faulted": "Faulted Agents", "value": ""},
             color_discrete_sequence=["#2ecc71", "#e74c3c"],
         )
         fig_bat.update_layout(
@@ -255,6 +257,42 @@ if len(fleet.metrics_history) > 2:
         st.plotly_chart(fig_bat, use_container_width=True)
 else:
     st.info("Start the simulation to see historical metrics.")
+
+# ── GA Optimiser Panel ────────────────────────────────────────────────────────
+st.divider()
+st.subheader("GA Dispatch Optimiser")
+st.caption(
+    "Each dispatch cycle with 2+ requests runs a Genetic Algorithm "
+    "(OX crossover, swap mutation, tournament selection, elitism) to find "
+    "the optimal agent→request assignment. Fitness = −(pickup distance + "
+    "battery penalty + coverage penalty)."
+)
+
+ga = fleet.ga_stats
+g1, g2, g3, g4 = st.columns(4)
+g1.metric("Total GA Dispatches", ga["total_dispatches"])
+g2.metric("Last Improvement vs Greedy", f"{ga['improvement_pct']}%")
+g3.metric("Last GA Cost", f"{ga['last_ga_cost']:.2f}")
+g4.metric("Cumulative Distance Saved", f"{ga['cumulative_saving']:.1f} units")
+
+if ga["convergence"]:
+    conv_df = pd.DataFrame({
+        "Generation": list(range(len(ga["convergence"]))),
+        "Best Cost": ga["convergence"],
+    })
+    fig_conv = px.line(
+        conv_df, x="Generation", y="Best Cost",
+        title="GA Convergence — Last Dispatch (cost falling = improving)",
+        color_discrete_sequence=["#f39c12"],
+    )
+    fig_conv.update_layout(
+        plot_bgcolor="#111111", paper_bgcolor="#111111",
+        font=dict(color="#eeeeee"), height=220,
+        margin=dict(l=10, r=10, t=40, b=10),
+    )
+    st.plotly_chart(fig_conv, use_container_width=True)
+else:
+    st.info("GA convergence curve appears here after first multi-request dispatch.")
 
 # ── Auto-advance simulation ───────────────────────────────────────────────────
 if st.session_state.running:
