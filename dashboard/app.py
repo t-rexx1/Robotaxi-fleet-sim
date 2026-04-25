@@ -10,7 +10,6 @@ import streamlit as st
 import plotly.graph_objects as go
 import plotly.express as px
 import pandas as pd
-import time
 
 from simulation.fleet_manager import FleetManager
 from simulation.fault_injector import SCENARIOS
@@ -125,9 +124,10 @@ st.caption(
 st.divider()
 
 # ══════════════════════════════════════════════════════════════════════════════
-# LIVE FRAGMENT — only this section rerenders each tick (no full-page blink)
+# LIVE FRAGMENT — auto-rerenders at tick_speed interval, no full-page blink
+# run_every is re-evaluated on each full-page rerun (sidebar widget change)
 # ══════════════════════════════════════════════════════════════════════════════
-@st.fragment
+@st.fragment(run_every=st.session_state.tick_speed)
 def live_dashboard():
     fleet: FleetManager = st.session_state.fleet
 
@@ -406,10 +406,6 @@ def live_dashboard():
     else:
         st.info("Historical charts appear after the simulation starts running.")
 
-    # ── Auto-advance: rerun only this fragment, not the full page ─────────────
-    if st.session_state.running:
-        time.sleep(st.session_state.tick_speed)
-        st.rerun(scope="fragment")
 
 
 live_dashboard()
